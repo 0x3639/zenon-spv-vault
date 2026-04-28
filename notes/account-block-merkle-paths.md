@@ -1,8 +1,20 @@
 # Account-Block Merkle Paths
 
-## Status (2026-04-28): flat-arm verifier shipped
+## Status (2026-04-28): flat-arm verifier + segment verifier shipped
 
-The SPV's commitment-membership verifier is live in `internal/verify/commitment.go` of the implementation repo. It implements the **flat-content** arm of `CommitmentEvidence` per ADR 0001: the verifier receives the full sorted `[]AccountHeader` slice for the target Momentum, recomputes `MomentumContent.Hash()`, binds it to a verified header's `ContentHash` field, and linear-scans for the target. End-to-end smoke against mainnet confirmed (heights ~13.1M, two-peer cross-checked between `my.hc1node.com` and `node.zenonhub.io`).
+**Phase 2 — commitment membership.** Live in `internal/verify/commitment.go`. Implements the **flat-content** arm of `CommitmentEvidence` per ADR 0001: receives the full sorted `[]AccountHeader` slice for the target Momentum, recomputes `MomentumContent.Hash()`, binds it to a verified header's `ContentHash` field, and linear-scans for the target.
+
+**Phase 3 — account-segment verification.** Live in `internal/verify/segment.go`. Implements steps 1–6 of the §3.3 segment spec:
+
+1. Per-block hash recompute via `chain.AccountBlock.ComputeHash`, mirroring `nom.AccountBlock.ComputeHash` (16 signed fields incl. `BigIntToBytes` left-padded Amount and 10-byte ZTS).
+2. Per-block Ed25519 signature verification against the recomputed hash.
+3. Account-chain linkage (`previous_hash` + height monotonicity within the segment).
+4. Commitment lookup by `AccountHeader` (NOT by `MomentumAcknowledged.Height` — the committing momentum is typically `MomentumAcknowledged + ~1`).
+5. Inherits the Phase 2 commitment check (the AccountHeader must be in the committed Content of an in-window momentum).
+
+A pinned-mainnet test fixture (`internal/fetch/testdata/mainnet_account_block.json`, block at `z1qpajvm…vljkx h=1782`) recomputes its hash `01e4877c…` byte-for-byte. If go-zenon's hash envelope ever changes upstream, that test breaks first — the alarm we want.
+
+End-to-end smoke against mainnet (heights ~13.1M, two-peer cross-checked between `my.hc1node.com` and `node.zenonhub.io`) confirmed all three layers chain together: trusted genesis → trusted headers → trusted commitment → trusted account block → ACCEPT.
 
 The Merkle (`O(log m)`) arm of the wire-format `oneof` is reserved and unused; if go-zenon ever publishes tree-shaped commitments, the verifier gets a second arm without breaking the flat one.
 
@@ -52,7 +64,7 @@ For a contiguous segment `B_A[i..j]` of account `A` (spec §3.3), the SPV must:
 5. For each block, verify its `AccountHeader` (`address, height, block.Hash`) appears in the corresponding `MomentumContent` slice — i.e., recompute `MomentumContent.Hash()` and check against the Momentum's bound `Content` hash.
 6. Verify each block's Ed25519 signature using the same wallet/crypto path as Momentum verification (source: `wallet/crypto.go:59`).
 
-As of 2026-04-28, step 4 (header chain) and step 5 (membership under `r_C`) are implemented. Step 1–3 (account-chain linkage and per-block hash recomputation) and step 6 (per-block Ed25519 signature) remain for the next phase — they extend `CommitmentEvidence` from "this `AccountHeader` is committed" to "this entire `AccountBlock` is committed *and* validly signed by its claimed producer."
+As of 2026-04-28, all six steps are implemented. Step 4 (header chain) is in `internal/verify/header.go`, step 5 (membership under `r_C`) is in `internal/verify/commitment.go`, and steps 1–3 + 6 (per-block hash, account-chain linkage, signature) are in `internal/verify/segment.go`. End-to-end smoke against mainnet covers all three layers concurrently via the `verify-segment` CLI subcommand.
 
 ## Sources
 
