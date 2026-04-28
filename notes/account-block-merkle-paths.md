@@ -1,5 +1,21 @@
 # Account-Block Merkle Paths
 
+## Status (2026-04-28): flat-arm verifier shipped
+
+The SPV's commitment-membership verifier is live in `internal/verify/commitment.go` of the implementation repo. It implements the **flat-content** arm of `CommitmentEvidence` per ADR 0001: the verifier receives the full sorted `[]AccountHeader` slice for the target Momentum, recomputes `MomentumContent.Hash()`, binds it to a verified header's `ContentHash` field, and linear-scans for the target. End-to-end smoke against mainnet confirmed (heights ~13.1M, two-peer cross-checked between `my.hc1node.com` and `node.zenonhub.io`).
+
+The Merkle (`O(log m)`) arm of the wire-format `oneof` is reserved and unused; if go-zenon ever publishes tree-shaped commitments, the verifier gets a second arm without breaking the flat one.
+
+## Empirical content-size distribution (2026-04-28 sample)
+
+Sampled 600 momentums in the height window `~13,125,919..13,126,419` (recent, low-activity period) on mainnet:
+
+- ~99% of recent momentums had **0** account headers in `Content`. Bandwidth for those is dominated by the header itself, not by content.
+- A handful had 1–2 entries (single account block per momentum during quiet periods).
+- The mainnet **genesis** has 14094 entries (initial allocations) — the realistic worst case for content size.
+
+Practical SPV cost: bundling commitments for low-activity momentums is essentially free; commitments referencing genesis or busy-period momentums consume the spec's worst-case `σ_π` budget.
+
 ## Spec expectation
 
 - The SPV implementation guide assumes binary Merkle membership proofs of size `O(log m)` under the per-Momentum commitment root `r_C`, where `m` is the number of commitments (account blocks) per Momentum (source: spec/spv-implementation-guide.md §3.2).
@@ -36,7 +52,7 @@ For a contiguous segment `B_A[i..j]` of account `A` (spec §3.3), the SPV must:
 5. For each block, verify its `AccountHeader` (`address, height, block.Hash`) appears in the corresponding `MomentumContent` slice — i.e., recompute `MomentumContent.Hash()` and check against the Momentum's bound `Content` hash.
 6. Verify each block's Ed25519 signature using the same wallet/crypto path as Momentum verification (source: `wallet/crypto.go:59`).
 
-The MVP scope (this phase) implements only step 4 — the header chain — and stubs steps 5–6 for a follow-up phase.
+As of 2026-04-28, step 4 (header chain) and step 5 (membership under `r_C`) are implemented. Step 1–3 (account-chain linkage and per-block hash recomputation) and step 6 (per-block Ed25519 signature) remain for the next phase — they extend `CommitmentEvidence` from "this `AccountHeader` is committed" to "this entire `AccountBlock` is committed *and* validly signed by its claimed producer."
 
 ## Sources
 
