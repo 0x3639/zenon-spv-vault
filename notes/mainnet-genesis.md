@@ -64,8 +64,23 @@ The recompute script (`/tmp/verify_genesis.py` at the time of fetch) lives in th
 - `reference/go-zenon/common/bytes.go:24-28` (`Uint64ToBytes` is big-endian)
 - RPC peer: `https://my.hc1node.com:35997`, accessed 2026-04-28.
 
+## Multi-peer cross-check (2026-04-28, closes ADR 0002 follow-up #1)
+
+Run via `tools/verify-mainnet-genesis --peers my.hc1node.com:35997,node.zenonhub.io:35997 --expected 9e2046…`:
+
+```
+Per-peer fetch + local recompute:
+  https://my.hc1node.com:35997: chain_id=1 height=1 hash=9e204601d1b7b1427fe12bc82622e610d8a6ad43c40abf020eb66e538bb8eeb0
+  https://node.zenonhub.io:35997: chain_id=1 height=1 hash=9e204601d1b7b1427fe12bc82622e610d8a6ad43c40abf020eb66e538bb8eeb0
+
+OK: 2/2 peers agree on mainnet genesis.
+OK: hash recomputed from signed envelope on every peer.
+OK: matches --expected.
+```
+
+Both operators independently returned a Momentum at height 1; the local recompute produced byte-identical hashes; the unanimous hash matches the embedded value. The trust claim on the embedded genesis is now "multi-peer attested" rather than "single-peer recomputed." The tool lives at `tools/verify-mainnet-genesis/main.go` in the SPV repo and is intended to be re-run before each release that bumps the embedded value.
+
 ## Open questions / `TODO`
 
-- **Independent cross-check.** Repeat the fetch against ≥2 independent operators (different ASN, different geography) and confirm byte-equivalence. Update this note with the cross-check results.
 - **Upstream reference.** If go-zenon's mainnet config bundle becomes accessible (e.g., a `genesis.json` shipped with the binary release), record the path here as a second-source citation.
-- **Periodic checkpoint pairs.** Per spv-implementation-guide.md §2.5, ship checkpoint pairs alongside genesis to defend against long-range attacks for long-offline verifiers. Track in a future ADR.
+- **Periodic checkpoint pairs.** Per spv-implementation-guide.md §2.5, shipped on the trust-hardening branch — see `notes/checkpoints.md` and `decisions/0003-checkpoint-policy.md`.
