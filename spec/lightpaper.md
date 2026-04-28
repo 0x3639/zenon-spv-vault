@@ -1,0 +1,1 @@
+<!-- QUALITY: extraction produced no text. The source PDF (1_ZENON_LIGHTPAPER_(CORE_TEAM).pdf) appears to be image-based; markitdown cannot OCR images. Refer to the original PDF in the upstream repo (github.com/TminusZ/zenon-developer-commons) for content. -->
